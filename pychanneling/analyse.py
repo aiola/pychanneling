@@ -33,9 +33,18 @@ def get_channeling_efficiency(deflection_series,
     counts_tot = deflection_series.count()
     if half_efficiency is True:
         counts_ch = counts_ch*2.
-    return np.array([counts_ch/counts_tot,
-                     counts_ch/counts_tot*np.sqrt((counts_ch+counts_tot)/(counts_ch*counts_tot))])
+    
+    eff = 0.
+    err = 0.
+    if counts_tot > 0.:
+        eff = counts_ch/counts_tot
+        if counts_ch > 0.:
+            err = eff*np.sqrt((counts_ch+counts_tot)/(counts_ch*counts_tot))
+        else:
+            err = 1./np.sqrt(counts_tot)
 
+    return np.array([eff,err])
+    
 def get_channeling_hist(incoming_angle_series,
                         deflection_series,
                         selection_width,
@@ -136,7 +145,7 @@ def efficiency_vs_incoming_angle(
     e_vals = np.zeros(incoming_angles.shape)
     e_errs = np.zeros(incoming_angles.shape)
     popt_series = np.zeros([incoming_angles.shape[0],3])
-    pcov_series = np.zeros([incoming_angles.shape[0],3,3])
+    pcov_series = np.zeros([incoming_angles.shape[0],3])
     
     for i,ang in enumerate(incoming_angles):
         hist, bin_edges, deflection_series_t = get_channeling_hist(
@@ -168,6 +177,16 @@ def efficiency_vs_incoming_angle(
             
             mean = fit_p[1]
             sigma = fit_p[2]
+
+            popt_series[i] = fit_p[:3]
+            pcov_series[i] = fit_e[:3]
+        except:
+            popt_series[i] = np.zeros([3])
+            pcov_series[i] = np.zeros([3])
+            mean  = p0[1]
+            sigma = p0[2]
+            
+        try:
             if half_eff == True:
                 eff, eff_err = get_channeling_efficiency(
                     deflection_series_t,
@@ -181,11 +200,9 @@ def efficiency_vs_incoming_angle(
 
             e_vals[i] = eff
             e_errs[i] = eff_err
-            popt_series[i] = fit_p
-            pcov_series[i] = fit_e
         except:
-            popt_series[i] = np.zeros([3])
-            pcov_series[i] = np.zeros([3])
+            pass
+        
     return e_vals, e_errs, popt_series, pcov_series
 
 def efficiency_vs_torsion(
@@ -330,5 +347,11 @@ def curvature_variation(
             ang_v[j] = fit_pg[1]
             ang_e[j] = fit_eg[1] 
         except:
-            pass
+            def reject_outliers(data,
+                                m=3):
+                return data[abs(data - np.mean(data)) < m * np.std(data)]
+            mask_defl = np.fabs(deflection_series_in - p0[1]) < p0[2] 
+            dx = reject_outliers(deflection_series_in[mask_defl],3)
+            ang_v[j] = np.mean(dx)
+            ang_e[j] = np.std(dx)
     return fit_v, fit_e, ang_v, ang_e

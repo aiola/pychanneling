@@ -22,6 +22,9 @@ def get_par_number(function):
 def linear(i,x):
     return i[0] + i[1]*x
 
+def quadratic(i,x):
+    return i[0] + i[1]*x + i[2]*x*x
+
 def gaussian(i,x):
     '''
     Description:

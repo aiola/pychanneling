@@ -5,8 +5,6 @@ Description:
 @author: Enrico Bagli
 """
 
-import numpy as np
-
 from . import pdf
 import scipy.odr as odr
 

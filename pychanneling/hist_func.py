@@ -30,6 +30,14 @@ def get_mean_x12(x1,x2):
 def get_width_x12(x1,x2):
     return np.abs((x2-x1)*0.5)
 
+def get_rotated(x,
+                y,
+                angle_deg = 0.):
+    angle_rad = np.deg2rad(angle_deg)
+    x_rot = x*np.cos(angle_rad) - y*np.sin(angle_rad)
+    y_rot = x*np.sin(angle_rad) + y*np.cos(angle_rad)
+    return x_rot, y_rot
+
 def get_bin_size_array_from_edges(bin_edges):
     '''
     Description:
@@ -123,7 +131,8 @@ def convolve_gaussian(hist,
         Convolve the histogram distribution with a gaussian.
     '''
     from scipy.ndimage import gaussian_filter
-    hist_new = gaussian_filter(hist, sigma=gaus_sigma)
+    step = get_bin_size_from_edges(bin_edges)
+    hist_new = gaussian_filter(hist, sigma=gaus_sigma/step)
     return hist_new, bin_edges
 
 def save_hist_to_csv(filename,

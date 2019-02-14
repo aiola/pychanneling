@@ -195,19 +195,22 @@ def get_geometrical_acceptance(crystal_interplanar_distance_A = 1.92,
     cry_id  = crystal_interplanar_distance_A # A
     return ( cry_id - tva * tva_rms * 2.) / cry_id # percentage
 
-def calc_channeling_efficiency(beam_momentum_GeV,
-                               beam_incoming_angle_mrad = 0.,
-                               beam_particle_mass_GeV = 0.9382720813,
-                               beam_charge = +1.,
-                               crystal_length_m = 1.E-3,
-                               crystal_bending_radius_m = 1.E10,
-                               crystal_el_field_max_Gev_on_cm = 5.7,
-                               crystal_pot_depth_eV = 16.,
-                               crystal_interplanar_distance_A = 1.92,
-                               crystal_Z = 14.,
-                               crystal_ionization_energy_eV = 172.,
-                               thermal_vibration_amplitude_A  = 0.075,
-                               thermal_vibration_rms_number   = 2.5):
+
+def calc_channeling_efficiency_single_plane(
+        beam_momentum_GeV,
+        beam_incoming_angle_mrad = 0.,
+        beam_particle_mass_GeV = 0.9382720813,
+        beam_charge = +1.,
+        crystal_length_m = 1.E-3,
+        crystal_bending_radius_m = 1.E10,
+        crystal_el_field_max_Gev_on_cm = 5.7,
+        crystal_pot_depth_eV = 16.,
+        crystal_interplanar_distance_A = 1.92,
+        crystal_Z = 14.,
+        crystal_ionization_energy_eV = 172.,
+        thermal_vibration_amplitude_A  = 0.075,
+        thermal_vibration_rms_number   = 2.5,
+        use_dch_variations = True):
     '''
     Description:
     
@@ -250,11 +253,33 @@ def calc_channeling_efficiency(beam_momentum_GeV,
                                 crystal_el_field_max_Gev_on_cm,)
 
     dl_n = calc_dechanneling_length_n_m(pb)
-    
+        
     ca  = get_critical_angle_mrad(pb,
                                   crystal_bending_radius_m,
                                   crystal_pot_depth_eV,
                                   crystal_el_field_max_Gev_on_cm)
+ 
+    if use_dch_variations:
+        dch_thetas = np.array(
+                [0.  , 0.22, 0.36, 0.54, 0.71, 0.89, 1.07])
+        dch_ratios = np.array(
+                [1. , 0.953, 0.857 , 0.843, 0.717, 0.587 , 0.474])
+        dch_interp1d = np.poly1d(
+            np.polyfit(dch_thetas,
+                       dch_ratios,
+                       2))    
+        dl_e *= dch_interp1d(np.fabs(ia/ca))
+        dl_n *= dch_interp1d(np.fabs(ia/ca))
+        if hasattr(dl_e, "__len__"):
+            dl_e[np.where( dl_e <= 0. )] = 1.E-10
+            dl_n[np.where( dl_n <= 0. )] = 1.E-10
+        else:
+            if dl_e <= 0. :
+                dl_e = 0.
+            if dl_n <= 0. :
+                dl_n = 0.
+
+
     eff_e = np.exp(- crystal_length_m / dl_e) 
     eff_n = np.exp(- crystal_length_m / dl_n)
     
@@ -269,15 +294,85 @@ def calc_channeling_efficiency(beam_momentum_GeV,
         eff[np.where( np.abs(ia) > ca )] = 0
     else:
         if np.abs(ia) > ca :
-            return 0.
+            return 1.E-10
             
     if hasattr(cbr, "__len__") or hasattr(cr, "__len__"):
         eff[np.where( np.abs(cbr) < cr )] = 0
     else:
         if np.abs(cbr) < cr:
-            return 0.
+            return 1.E-10
             
     return eff
+
+
+import collections
+def calc_channeling_efficiency(beam_momentum_GeV,
+                               beam_incoming_angle_mrad = 0.,
+                               beam_particle_mass_GeV = 0.9382720813,
+                               beam_charge = +1.,
+                               crystal_length_m = 1.E-3,
+                               crystal_bending_radius_m = 1.E10,
+                               crystal_el_field_max_Gev_on_cm = 5.7,
+                               crystal_pot_depth_eV = 16.,
+                               crystal_interplanar_distance_A = 1.92,
+                               crystal_Z = 14.,
+                               crystal_ionization_energy_eV = 172.,
+                               thermal_vibration_amplitude_A  = 0.075,
+                               thermal_vibration_rms_number   = 2.5,
+                               use_dch_variations = True):
+    '''
+    Description:
+    
+    Reference:
+        Crystal Channeling and Its Application at High-Energy Accelerators
+        Authors: Biryukov, Valery M., Chesnokov, Yuri A., Kotov, Vladilen I.
+        https://www.springer.com/it/book/9783540607694
+
+        Steering efficiency of a ultrarelativistic proton beam in a thin bent
+        crystal
+        Authors: E. Bagli et al.
+        https://link.springer.com/article/10.1140%2Fepjc%2Fs10052-014-2740-7
+
+    '''
+    if isinstance(crystal_pot_depth_eV, collections.Iterable):
+        eff = 0
+        ia_tot = np.sum(crystal_interplanar_distance_A)
+        for ef,pot,ia in zip(crystal_el_field_max_Gev_on_cm,
+                             crystal_pot_depth_eV,
+                             crystal_interplanar_distance_A):
+            eff += calc_channeling_efficiency_single_plane(
+                beam_momentum_GeV,
+                beam_incoming_angle_mrad,
+                beam_particle_mass_GeV,
+                beam_charge,
+                crystal_length_m,
+                crystal_bending_radius_m,
+                ef,
+                pot,
+                ia,
+                crystal_Z,
+                crystal_ionization_energy_eV,
+                thermal_vibration_amplitude_A,
+                thermal_vibration_rms_number,
+                use_dch_variations)*ia/ia_tot
+            return eff
+            
+    else:
+        return calc_channeling_efficiency_single_plane(
+                beam_momentum_GeV,
+                beam_incoming_angle_mrad,
+                beam_particle_mass_GeV,
+                beam_charge,
+                crystal_length_m,
+                crystal_bending_radius_m,
+                crystal_el_field_max_Gev_on_cm,
+                crystal_pot_depth_eV,
+                crystal_interplanar_distance_A,
+                crystal_Z,
+                crystal_ionization_energy_eV,
+                thermal_vibration_amplitude_A,
+                thermal_vibration_rms_number,
+                use_dch_variations)
 
 def get_channeling_parameter_table(
             beam_momentum_GeV,
@@ -292,7 +387,8 @@ def get_channeling_parameter_table(
             crystal_Z = 14.,
             crystal_ionization_energy_eV = 172.,
             thermal_vibration_amplitude_A  = 0.075,
-            thermal_vibration_rms_number   = 2.5):     
+            thermal_vibration_rms_number   = 2.5,
+            use_dch_variations = False):     
     
     beam_p      = beam_momentum_GeV
     beam_m      = beam_particle_mass_GeV
@@ -323,7 +419,8 @@ def get_channeling_parameter_table(
             crystal_Z,
             crystal_ionization_energy_eV,
             thermal_vibration_amplitude_A,
-            thermal_vibration_rms_number)       
+            thermal_vibration_rms_number,
+            use_dch_variations)       
         
     dl_e_mm = calc_dechanneling_length_e_m(
         beam_momentum_GeV = beam_momentum_GeV,
@@ -343,7 +440,7 @@ def get_channeling_parameter_table(
     print('Length [mm] ' + '%2.2f' % (crystal_length_m*1.E3))
     print('Radius [m] ' + '%2.2f' % (crystal_bending_radius_m))
     print(r'Defl. Ang. [µrad] ' + '%2.2f' % (ch_ang_urad))
-    print(r'Max. Defl. Eff. [%] ' + '%2.2f' % (ch_eff))
+    print(r'Max. Defl. Eff. [%] ' + '%2.2f' % (ch_eff*100.))
     print('Crit. Ang. [µrad] ' + '%2.2f' % (ch_crt_urad))
     print('El. Dech. Length [mm] ' + '%2.2f' % (dl_e_mm))
     print('Nucl. Dech. Length [mm] ' + '%2.2f' % (dl_n_mm))
