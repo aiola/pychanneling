@@ -64,7 +64,7 @@ def get_Thomas_Fermi_radius_A(crystal_Z):
     Description:
     '''
     Bohr_radius = 0.529          # A   - Bohr radius
-    return Bohr_radius * 0.88534 / np.cbrt(crystal_Z);
+    return Bohr_radius * 0.88534 / np.cbrt(crystal_Z)
 
 def get_bending_radius_m(crystal_length_m,
                          deflection_angle_rad):
